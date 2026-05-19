@@ -1,8 +1,9 @@
 import requests
 
-# 在这里填入你找到的公开订阅链接
+# 把公开订阅链接填到这里
 urls = [
-    # "https://raw.githubusercontent.com/用户名/仓库名/分支/文件名.txt",
+    "https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/clash20260512.yml",
+    # 可以继续加更多链接，每行一个，用逗号隔开
 ]
 
 all_proxies = set()
