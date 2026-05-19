@@ -1,9 +1,7 @@
-cat > collect_proxy.py << 'EOF'
 import requests
 
-# 替换成你找到的公开订阅链接
+# 在这里填入你找到的公开订阅链接
 urls = [
-    # 示例格式，需要替换成真实地址
     # "https://raw.githubusercontent.com/用户名/仓库名/分支/文件名.txt",
 ]
 
@@ -25,4 +23,3 @@ with open('proxies.txt', 'w') as f:
         f.write(proxy + '\n')
 
 print(f"共 {len(all_proxies)} 个节点")
-EOF
