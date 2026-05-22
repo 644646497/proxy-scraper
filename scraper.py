@@ -1,14 +1,12 @@
-import requests
+import asyncio
+import aiohttp
 import re
+import time
 
-sources = [
-    "https://t.me/s/freevpnssr",
-    "https://t.me/s/v2list",
-    "https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2",
-    "https://proxypool.link/clash/proxies"
-]
-
-all_nodes = set()
+# ===== 配置 =====
+TIMEOUT = 15
+CONCURRENCY = 10
+DELAY = 1  # 防止TG限流
 
 patterns = [
     r'ss://[^\s"\'<]+',
@@ -23,31 +21,46 @@ headers = {
     "User-Agent": "Mozilla/5.0"
 }
 
-for url in sources:
-    try:
-        print(f"[+] Fetching: {url}")
+# ===== 读取源 =====
+with open("sources.txt", "r") as f:
+    sources = [i.strip() for i in f.readlines() if i.strip()]
 
-        r = requests.get(
-            url,
-            headers=headers,
-            timeout=20
-        )
+# ===== 存储结果 =====
+nodes = set()
+sem = asyncio.Semaphore(CONCURRENCY)
 
-        text = r.text
+async def fetch(session, url):
+    async with sem:
+        try:
+            async with session.get(url, timeout=TIMEOUT, headers=headers) as resp:
+                text = await resp.text()
+                return url, text
+        except Exception as e:
+            print(f"[-] Error: {url} -> {e}")
+            return url, ""
 
-        for pattern in patterns:
-            matches = re.findall(pattern, text)
+async def main():
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch(session, url) for url in sources]
 
-            for node in matches:
-                all_nodes.add(node.strip())
+        results = await asyncio.gather(*tasks)
 
-    except Exception as e:
-        print(f"[-] Error: {e}")
+        for url, text in results:
+            print(f"[+] parsed: {url}")
 
-print(f"Total nodes: {len(all_nodes)}")
+            for p in patterns:
+                for node in re.findall(p, text):
+                    nodes.add(node.strip())
 
-with open("sub.txt", "w", encoding="utf-8") as f:
-    for node in all_nodes:
-        f.write(node + "\n")
+            time.sleep(DELAY)
 
-print("Saved to sub.txt")
+    # ===== 输出 =====
+    print(f"Total nodes: {len(nodes)}")
+
+    with open("sub.txt", "w", encoding="utf-8") as f:
+        for n in nodes:
+            f.write(n + "\n")
+
+    print("Saved sub.txt")
+
+asyncio.run(main())
