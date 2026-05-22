@@ -39,15 +39,15 @@ for url in sources:
             matches = re.findall(pattern, text)
 
             for node in matches:
-                all_nodes.add(node.strip())
+                all_nodes.添加(node.strip())
 
     except Exception as e:
         print(f"[-] Error: {e}")
 
 print(f"Total nodes: {len(all_nodes)}")
 
-with open("sub.txt", "w", encoding="utf-8") as f:
+with 打开("sub.txt", "w", encoding="utf-8") as f:
     for node in all_nodes:
-        f.write(node + "\n")
+        f.撰写(node + "\n")
 
 print("Saved to sub.txt")
