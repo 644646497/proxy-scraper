@@ -2,97 +2,151 @@ import asyncio
 import aiohttp
 import re
 import time
+import json
 
-# ===== 配置 =====
+# ================= CONFIG =================
 TIMEOUT = 10
 CONCURRENCY = 20
+MAX_LATENCY = 800
 
 TEST_URL = "https://www.google.com/generate_204"
-
-# 延迟阈值（ms）
-MAX_LATENCY = 800
 
 patterns = [
     r'ss://[^\s"\']+',
     r'ssr://[^\s"\']+',
     r'vmess://[^\s"\']+',
     r'trojan://[^\s"\']+',
-    r'vless://[^\s"\']+',
+    r'vless://[^\s"\']+'
 ]
 
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
-
-# ===== 读取 sources =====
+# ================= LOAD SOURCES =================
 with open("sources.txt", "r") as f:
-    sources = [i.strip() for i in f if i.strip()]
+    sources = [x.strip() for x in f if x.strip()]
 
 nodes = set()
 sem = asyncio.Semaphore(CONCURRENCY)
 
-# ===== 抓取网页 =====
+# ================= FETCH =================
 async def fetch(session, url):
     async with sem:
         try:
-            async with session.get(url, timeout=TIMEOUT, headers=headers) as resp:
-                return await resp.text()
+            async with session.get(url, timeout=TIMEOUT) as r:
+                return await r.text()
         except:
             return ""
 
-# ===== 测速函数 =====
-async def test_node(session, node):
+# ================= TCP CHECK =================
+async def tcp_check(session, proxy):
     try:
         start = time.time()
-
-        async with session.get(TEST_URL, proxy=node, timeout=TIMEOUT) as resp:
-            if resp.status != 204:
+        async with session.get(TEST_URL, proxy=proxy, timeout=TIMEOUT) as r:
+            if r.status != 204:
                 return None
-
-        latency = (time.time() - start) * 1000
-
-        if latency > MAX_LATENCY:
-            return None
-
-        return (node, latency)
-
+        return (time.time() - start) * 1000
     except:
         return None
 
-# ===== 主流程 =====
+# ================= SCORE =================
+def score(latency):
+    if latency is None:
+        return 0
+    if latency > 800:
+        return 10
+    return max(0, 100 - int(latency / 10))
+
+# ================= CLASSIFY =================
+def classify(n):
+    n = n.lower()
+    if "hk" in n or "hong" in n or "🇭🇰" in n:
+        return "HK"
+    if "us" in n or "usa" in n or "🇺🇸" in n:
+        return "US"
+    if "jp" in n or "japan" in n or "🇯🇵" in n:
+        return "JP"
+    return "OTHER"
+
+# ================= MAIN =================
 async def main():
     async with aiohttp.ClientSession() as session:
 
-        # 1. 抓源
-        tasks = [fetch(session, url) for url in sources]
-        pages = await asyncio.gather(*tasks)
+        # ---- fetch sources ----
+        pages = await asyncio.gather(*[fetch(session, u) for u in sources])
 
+        # ---- extract nodes ----
         for text in pages:
             for p in patterns:
                 for n in re.findall(p, text):
                     nodes.add(n.strip())
 
-        print(f"[+] raw nodes: {len(nodes)}")
+        print("[+] raw nodes:", len(nodes))
 
-        # 2. 测速
-        print("[+] testing nodes...")
+        # ---- test nodes ----
+        results = []
 
-        results = await asyncio.gather(
-            *[test_node(session, n) for n in list(nodes)]
-        )
+        async def worker(n):
+            latency = await tcp_check(session, n)
+            if latency is None:
+                return None
+            if latency > MAX_LATENCY:
+                return None
+            return {
+                "node": n,
+                "latency": latency,
+                "score": score(latency),
+                "group": classify(n)
+            }
 
+        results = await asyncio.gather(*[worker(n) for n in list(nodes)])
         valid = [r for r in results if r]
 
-        print(f"[+] valid nodes: {len(valid)}")
+        print("[+] valid nodes:", len(valid))
 
-        # 3. 排序（按延迟）
-        valid.sort(key=lambda x: x[1])
+        # ---- sort by score ----
+        valid.sort(key=lambda x: x["score"], reverse=True)
 
-        # 4. 输出
-        with open("sub.txt", "w", encoding="utf-8") as f:
-            for node, lat in valid:
-                f.write(f"{node}\n")
+        # ---- group ----
+        groups = {"HK": [], "US": [], "JP": [], "OTHER": []}
+        for v in valid:
+            groups[v["group"]].append(v)
 
-        print("[+] saved sub.txt")
+        # ---- output sub.txt ----
+        with open("sub.txt", "w") as f:
+            for v in valid:
+                f.write(v["node"] + "\n")
+
+        # ---- output grouped ----
+        for k in groups:
+            with open(f"{k}.txt", "w") as f:
+                for v in groups[k]:
+                    f.write(v["node"] + "\n")
+
+        # ---- clash ----
+        clash = {
+            "proxies": [{"name": f"node-{i}", "url": v["node"]} for i, v in enumerate(valid)],
+            "proxy-groups": [{
+                "name": "AUTO",
+                "type": "select",
+                "proxies": [f"node-{i}" for i in range(len(valid))]
+            }]
+        }
+
+        with open("clash.json", "w") as f:
+            json.dump(clash, f, indent=2)
+
+        # ---- sing-box ----
+        singbox = {
+            "outbounds": [
+                {
+                    "type": "selector",
+                    "tag": "auto",
+                    "outbounds": [v["node"] for v in valid]
+                }
+            ]
+        }
+
+        with open("singbox.json", "w") as f:
+            json.dump(singbox, f, indent=2)
+
+        print("[+] done")
 
 asyncio.run(main())
