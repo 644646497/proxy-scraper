@@ -1,0 +1,9 @@
+{
+  "outbounds": [
+    {
+      "type": "selector",
+      "tag": "auto",
+      "outbounds": []
+    }
+  ]
+}

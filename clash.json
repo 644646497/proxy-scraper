@@ -1,0 +1,10 @@
+{
+  "proxies": [],
+  "proxy-groups": [
+    {
+      "name": "AUTO",
+      "type": "select",
+      "proxies": []
+    }
+  ]
+}
