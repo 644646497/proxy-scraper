@@ -1,56 +1,53 @@
 import requests
 import re
-import base64
 
-urls = [
-    "https://raw.githubusercontent.com/free-nodes/clashfree/refs/heads/main/clash20260512.yml",
-    "https://proxypool.link/ss/sub",
-    "https://proxypool.link/sip002/sub",
-    "https://proxypool.link/ssr/sub",
-    "https://proxypool.link/vmess/sub",
-    "https://proxypool.link/trojan/sub",
+sources = [
+    "https://t.me/s/freevpnssr",
+    "https://t.me/s/v2list",
+    "https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2",
+    "https://proxypool.link/clash/proxies"
 ]
 
-all_proxies = []
+all_nodes = set()
 
-for url in urls:
+patterns = [
+    r'ss://[^\s"\'<]+',
+    r'ssr://[^\s"\'<]+',
+    r'vmess://[^\s"\'<]+',
+    r'trojan://[^\s"\'<]+',
+    r'vless://[^\s"\'<]+',
+    r'hy2://[^\s"\'<]+'
+]
+
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+for url in sources:
     try:
-        resp = requests.get(url, timeout=30)
-        print(f"抓取: {url} - 状态码 {resp.status_code}")
-        for line in resp.text.splitlines():
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            # 解析 Clash YAML 格式的节点
-            if '{' in line and 'type: ss' in line:
-                try:
-                    part = line.split('{', 1)[1].rsplit('}', 1)[0]
-                    name = re.search(r'name:\s*([^,]+)', part)
-                    server = re.search(r'server:\s*([^,]+)', part)
-                    port = re.search(r'port:\s*(\d+)', part)
-                    cipher = re.search(r'cipher:\s*([^,]+)', part)
-                    password = re.search(r'password:\s*([^,]+)', part)
-                    
-                    if server and port and cipher and password:
-                        auth = base64.b64encode(f"{cipher.group(1)}:{password.group(1)}".encode()).decode()
-                        ss_link = f"ss://{auth}@{server.group(1)}:{port.group(1)}"
-                        if name:
-                            ss_link += f"#{name.group(1)}"
-                        all_proxies.append(ss_link)
-                except:
-                    pass
-            elif line.startswith('ss://') or line.startswith('vmess://') or line.startswith('trojan://') or line.startswith('ssr://'):
-                all_proxies.append(line)
-        print(f"  当前已抓取 {len(all_proxies)} 个节点")
+        print(f"[+] Fetching: {url}")
+
+        r = requests.get(
+            url,
+            headers=headers,
+            timeout=20
+        )
+
+        text = r.text
+
+        for pattern in patterns:
+            matches = re.findall(pattern, text)
+
+            for node in matches:
+                all_nodes.add(node.strip())
+
     except Exception as e:
-        print(f"失败: {url} - {e}")
+        print(f"[-] Error: {e}")
 
-# 去重
-all_proxies = list(dict.fromkeys(all_proxies))
+print(f"Total nodes: {len(all_nodes)}")
 
-with open('subscribe.txt', 'w') as f:
-    for proxy in all_proxies:
-        f.write(proxy + '\n')
+with open("sub.txt", "w", encoding="utf-8") as f:
+    for node in all_nodes:
+        f.write(node + "\n")
 
-print(f"共 {len(all_proxies)} 个节点（已去重）")
-print("订阅地址: https://raw.githubusercontent.com/644646497/proxy-scraper/main/subscribe.txt")
+print("Saved to sub.txt")
