@@ -1,0 +1,32 @@
+name: Proxy Speed & Generate Subscribe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install libs
+        run: pip install requests aiohttp
+
+      - name: Run speed test & build subscribe
+        run: python3 proxy_sub_gen.py
+
+      - name: Upload result files
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxy-sub-files
+          path: |
+            valid_nodes.txt
+            clash_sub.txt
+            base64_sub.txt
